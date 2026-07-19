@@ -8,7 +8,7 @@ from typing import List
 from torch import Tensor
 from jaxtyping import Int, Float
 
-from pipeline.utils.utils import get_orthogonalized_matrix
+from pipeline.utils.utils import get_orthogonalized_matrix, get_device
 from pipeline.model_utils.model_base import ModelBase
 
 # Qwen chat templates are based on
@@ -96,8 +96,11 @@ def act_add_qwen_weights(model, direction: Float[Tensor, "d_model"], coeff, laye
 class QwenModel(ModelBase):
 
     def _load_model(self, model_path, dtype=torch.float16):
+        device = get_device()
+
         model_kwargs = {}
-        model_kwargs.update({"use_flash_attn": True})
+        # flash-attn is CUDA-only; the Qwen remote code errors if requested elsewhere
+        model_kwargs.update({"use_flash_attn": device == "cuda"})
         if dtype != "auto":
             model_kwargs.update({
                 "bf16": dtype==torch.bfloat16,
@@ -105,15 +108,21 @@ class QwenModel(ModelBase):
                 "fp32": dtype==torch.float32,
             })
 
+        if device == "cuda":
+            # preserve the original multi-GPU auto-sharding behaviour on CUDA
+            model_kwargs["device_map"] = "auto"
+
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=dtype,
             trust_remote_code=True,
-            device_map="auto",
             **model_kwargs,
         ).eval()
 
-        model.requires_grad_(False) 
+        if device != "cuda":
+            model = model.to(device)
+
+        model.requires_grad_(False)
 
         return model
 

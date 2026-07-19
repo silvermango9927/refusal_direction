@@ -1,7 +1,13 @@
+import os
+
+# On Apple Silicon (MPS), a few ops used by transformers' generate() (e.g. aten::isin)
+# are not yet implemented in torch; route those to CPU instead of crashing. Must be set
+# before torch is imported. This is a no-op on CUDA/CPU machines.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
 import torch
 import random
 import json
-import os
 import argparse
 
 from dataset.load_dataset import load_dataset_split, load_dataset

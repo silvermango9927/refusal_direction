@@ -7,7 +7,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from typing import List
 from jaxtyping import Float
 
-from pipeline.utils.utils import get_orthogonalized_matrix
+from pipeline.utils.utils import get_orthogonalized_matrix, get_device
 from pipeline.model_utils.model_base import ModelBase
 
 # Gemma chat template is based on
@@ -85,13 +85,22 @@ def act_add_gemma_weights(model, direction: Float[Tensor, "d_model"], coeff, lay
 class GemmaModel(ModelBase):
 
     def _load_model(self, model_path, dtype=torch.bfloat16):
+        device = get_device()
+
+        model_kwargs = {"torch_dtype": dtype}
+        if device == "cuda":
+            # preserve the original multi-GPU auto-sharding behaviour on CUDA
+            model_kwargs["device_map"] = "auto"
+
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=dtype,
-            device_map="cuda",
+            **model_kwargs,
         ).eval()
 
-        model.requires_grad_(False) 
+        if device != "cuda":
+            model = model.to(device)
+
+        model.requires_grad_(False)
 
         return model
 

@@ -5,11 +5,15 @@ import gc
 import numpy as np
 
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
-from vllm.distributed.parallel_state import destroy_model_parallel
 import torch
 import litellm
 import time
+
+# NOTE: `vllm` is a CUDA-only dependency and is imported lazily inside
+# `harmbench_judge_fn` so that the rest of the pipeline (direction extraction,
+# ablation, generation, substring / LlamaGuard2 evals) can run on machines
+# without a CUDA GPU (e.g. Apple Silicon). It is only required if you request
+# the "harmbench" evaluation methodology.
 
 # based on https://github.com/JailbreakBench/jailbreakbench/blob/4dbcc097739dd684fbf789cc3d4f97372bd72851/src/jailbreakbench/classifier.py
 # augmented with some additional prefixes
@@ -147,6 +151,11 @@ def llamaguard2_judge_fn(prompts: List[str], responses: List[str]) -> List[int]:
 
 # taken from https://github.com/centerforaisafety/HarmBench/blob/main/evaluate_completions.py#L65
 def harmbench_judge_fn(prompts: List[str], responses: List[str]) -> List[int]:
+
+    # vllm is imported lazily: it is CUDA-only and unavailable on some platforms
+    # (e.g. Apple Silicon). Only the "harmbench" methodology needs it.
+    from vllm import LLM, SamplingParams
+    from vllm.distributed.parallel_state import destroy_model_parallel
 
     classifier = LLM(model='cais/HarmBench-Llama-2-13b-cls', tensor_parallel_size=1)
     classifier.llm_engine.tokenizer.truncation_side = "left"

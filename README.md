@@ -28,6 +28,17 @@ python3 -m pipeline.run_pipeline --model_path {model_path}
 ```
 where `{model_path}` is the path to a HuggingFace model. For example, for Llama-3 8B Instruct, the model path would be `meta-llama/Meta-Llama-3-8B-Instruct`.
 
+### Running on Apple Silicon (macOS / MPS)
+
+The pinned `requirements.txt` targets CUDA/Linux (`vllm`, `xformers`, `triton`, `nvidia-*-cu12`, `flash-attn`) and cannot be installed on a Mac. The pipeline itself, however, runs on Apple Silicon via the MPS backend. To run on a Mac:
+
+1. Use Python 3.10 and install only the Mac-compatible dependencies (skip the CUDA-only ones above). At minimum you need: `torch transformers datasets litellm jaxtyping einops numpy pandas matplotlib tiktoken python-dotenv sentencepiece`.
+2. Device selection is automatic (`cuda` → `mps` → `cpu`), and `PYTORCH_ENABLE_MPS_FALLBACK=1` is set for you in `run_pipeline.py` (a couple of ops used by `generate()` are not implemented on MPS and fall back to CPU).
+3. Prefer a small model — a 16GB Mac comfortably runs the 2B-class models but not the 8B ones. Gated models (Gemma, Llama) require accepting the license on their HuggingFace page with the account tied to your `HF_TOKEN`.
+4. The `harmbench` evaluation methodology requires `vllm` and is unavailable on Mac; use `substring_matching` (local) and/or `llamaguard2` (Together API). These are the defaults.
+
+Note: MPS lacks `float64` support, so the pipeline's high-precision accumulators fall back to `float32` on MPS (see `high_precision_dtype` in `pipeline/utils/utils.py`); numerical results may differ slightly from a CUDA/`float64` run.
+
 The pipeline performs the following steps:
 1. Extract candiate refusal directions
     - Artifacts will be saved in `pipeline/runs/{model_alias}/generate_directions`
