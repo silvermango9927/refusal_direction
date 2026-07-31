@@ -1,0 +1,49 @@
+# requirements-runpod.txt
+# Known-good minimal environment for reproducing the refusal_direction pipeline
+# on a CUDA GPU (e.g. RunPod RTX 4090), Python 3.10.
+#
+# This is the subset of the original requirements.txt that the pipeline actually
+# needs at runtime, at the same pinned versions, PLUS two packages the reproduction
+# surfaced:
+#   - zstandard : decompress the Pile (.jsonl.zst) during the CE-loss eval (step 5)
+#   - hf_transfer: satisfies HF_HUB_ENABLE_HF_TRANSFER=1, which the RunPod image sets
+#
+# It intentionally OMITS the vllm / outlines / xformers / flash-attn / triton / ray /
+# nvidia-*-cu12 chain from the original requirements.txt. That chain exists ONLY for
+# the optional "harmbench" eval methodology, and its pinned transitive dependency
+# `pyairports==2.1.1` has been yanked from PyPI, so the full file no longer resolves.
+# The default eval methodologies (substring_matching + llamaguard2) do not need it.
+#
+# NOTE on llamaguard2: the hardcoded Together judge model in
+# pipeline/submodules/evaluate_jailbreak.py ("together_ai/Meta-Llama/llamaguard-2-8B")
+# is deprecated on Together and 400s. Either run with jailbreak_eval_methodologies =
+# ("substring_matching",) in pipeline/config.py, or repoint MODEL/tokenizer at a
+# currently-served Llama-Guard model. (litellm is still a hard top-level import in
+# evaluate_jailbreak.py, so it must be installed regardless.)
+#
+# Install (uv auto-fetches Python 3.10):
+#   uv venv --python 3.10 venv && source venv/bin/activate
+#   uv pip install -r requirements-runpod.txt
+# or with plain pip inside a Python 3.10 venv:
+#   pip install -r requirements-runpod.txt
+
+# --- core pipeline deps (pinned to match the original requirements.txt) ---
+torch==2.3.0
+transformers==4.44.2
+datasets==2.19.2
+accelerate==0.31.0
+litellm==1.40.9
+jaxtyping==0.2.29
+einops==0.8.0
+numpy==1.26.4
+pandas==2.2.2
+matplotlib==3.9.0
+tiktoken==0.7.0          # Qwen tokenizer
+sentencepiece==0.2.0     # Llama / Gemma / Yi tokenizers
+protobuf==5.27.1         # some HF slow->fast tokenizer conversions
+python-dotenv==1.0.1
+tqdm==4.66.4
+
+# --- runtime extras surfaced during reproduction ---
+zstandard==0.22.0        # Pile (.jsonl.zst) decompression for the CE-loss eval
+hf_transfer              # fast HF downloads; RunPod images set HF_HUB_ENABLE_HF_TRANSFER=1
